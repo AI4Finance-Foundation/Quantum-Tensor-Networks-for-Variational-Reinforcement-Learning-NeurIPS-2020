@@ -14,8 +14,11 @@ import tensornetwork as tn
 from tensornetwork import contractors
 backend = 'pytorch'
 
+from .K_Spin import K_Spin
+
 
 def VRL_train_combined(five_tuple, k, data, combined_cores, lr=0.02, epochs=5000):
+    s, a, P_mat, R_vec, gamma = five_tuple
     energy_history = []
     Pbar = pkbar.Pbar(name='progress', target=epochs)
     op = optim.SGD([data], lr=lr, momentum=0.9, weight_decay=5e-4)
@@ -43,6 +46,7 @@ def VRL_train_combined(five_tuple, k, data, combined_cores, lr=0.02, epochs=5000
 
 
 def VRL_train(five_tuple, k, data, H_core, lr=0.00001, epochs=int(1e4)):
+    s, a, P_mat, R_vec, gamma = five_tuple
     energy_history = []
     Pbar = pkbar.Pbar(name='progress', target=epochs)
     op = optim.SGD([data], lr=lr, momentum=0.9, weight_decay=5e-4)
@@ -68,7 +72,7 @@ def VRL_train(five_tuple, k, data, H_core, lr=0.00001, epochs=int(1e4)):
         for i in range(k):
             energy -= contractors.branch(tn.reachable(core[i]), nbranch=1).get_tensor()
         energy.backward()
-        energy_history.append(-energy)
+        energy_history.append(energy)
 
         op.step()
         Pbar.update(e)

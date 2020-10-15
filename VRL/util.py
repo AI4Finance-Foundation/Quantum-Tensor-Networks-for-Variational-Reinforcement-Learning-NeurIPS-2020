@@ -15,13 +15,14 @@ from tensornetwork import contractors
 backend = 'pytorch'
 
 
-def initialize_H(k, P_mat, R_vec, s, a, gamma=0.9):
+def initialize_H(five_tuple, k):
+    s, a, P_mat, R_vec, gamma = five_tuple
     h = torch.zeros([s * a] * k, dtype=torch.float32)
     pbar = pkbar.Pbar(name='initialize H, k='+str(k), target=(s * a))
     
     for i in range(s * a):
         pbar.update(i)
-        in_edge = torch.sum(P[..., i // a])
+        in_edge = torch.sum(P_mat[..., i // a])
         
         if k == 1:
             h[i] = 1
@@ -106,13 +107,13 @@ def fill_dims(tensor, dim):
     return pad
 
 
-def build_combined_network(five_tuple, k, chi, omega, mode='cp'):
+def build_combined_network(five_tuple, k, chi, omega, mode='full'):
     s, a, P, R, gamma = five_tuple
     data = torch.zeros((s * a, 1), requires_grad=True)
     H = torch.randn([s * a] * k, dtype=torch.float32)
     O = torch.zeros(omega[-1].shape)
     for i in range(k):
-        Hi = initialize_H(i + 1, P, R, s, a, gamma=gamma)
+        Hi = initialize_H(five_tuple, i + 1)
         H += fill_dims(Hi.get_tensor(), k)
         O += fill_dims(omega[i], k)
     H *= O
@@ -140,7 +141,7 @@ def build_network(five_tuple, k, chi, omega):
     H_core = []
     data = torch.zeros((s * a, 1), requires_grad=True)
     for i in range(k):
-        H.append(initialize_H(i + 1, P_mat, R_vec, s, a, gamma=0.5))
+        H.append(initialize_H(five_tuple, i + 1))
         if i > 1:
             [core, factors], error = parafac(H[i].get_tensor(), 
                                              chi, n_iter_max=20, init='svd', 
