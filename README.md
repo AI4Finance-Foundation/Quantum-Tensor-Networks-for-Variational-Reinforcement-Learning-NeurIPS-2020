@@ -1,6 +1,7 @@
-# Varitional Reinfocement Learning (VRL) using Quantum Tensor Networks
+# Varitional Reinfocement Learning (VRL)
+# via Quantum Tensor Networks
 
-This repository provides the implementation for VRL algorithm and applies it to the classic GridWorld puzzle.
+This repository provides the implementation for VRL algorithm and applies it to the classic Gridworld puzzle.
 
 ## Usage
 
@@ -24,3 +25,5 @@ H, cores, data, completion_error = build_network(five_tuple, k, chi, omega)
 spin, energy_history = VRL_train(five_tuple, k, data, cores, lr=0.1, epochs=1000)
 ```
 One can retrieve the trained policy from the variable `spin`; the optimization processes for tensor completion and energy minimization are tracked by `completion_error` and `energy_history` respectively.
+
+An example notebook is provided in the root directory.
