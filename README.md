@@ -1,5 +1,4 @@
-# Varitional Reinfocement Learning (VRL)
-# via Quantum Tensor Networks
+# Varitional Reinfocement Learning (VRL) via Quantum Tensor Networks
 
 This repository provides the implementation for VRL algorithm and applies it to the classic Gridworld puzzle.
 
