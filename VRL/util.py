@@ -6,8 +6,8 @@ import pkbar
 import time
 
 import tensorly as tl
-from tensorly.decomposition import matrix_product_state, parafac
-from tensorly.mps_tensor import mps_to_tensor
+from tensorly.decomposition import tensor_train, parafac
+from tensorly.tt_tensor import tt_to_tensor
 tl.set_backend('pytorch')
 
 import tensornetwork as tn
@@ -55,16 +55,17 @@ def put_mps(tensors):
     '''
     mps = []
     for i in range(len(tensors)):
-        mps.append(tn.Node(tensors[i].detach().clone(), backend=backend))
+        mps.append(tn.Node(tensors[i].detach().clone().squeeze(), backend=backend))
     
     if len(tensors) == 1:
         return mps, []
     
     connected_edges = []
-    conn = mps[0][1] ^ mps[1][0]
-    for k in range(1, len(tensors)-1):
-        conn = mps[k][2] ^ mps[k+1][0]
-        connected_edges.append(conn)
+    conn = mps[0][-1] ^ mps[1][0]
+    if len(mps) > 2:
+        for k in range(1, len(tensors)-1):
+            conn = mps[k][-1] ^ mps[k+1][0]
+            connected_edges.append(conn)
 
     return mps, connected_edges
 
@@ -107,51 +108,23 @@ def fill_dims(tensor, dim):
     return pad
 
 
-def build_combined_network(five_tuple, k, chi, omega, mode='full'):
-    s, a, P, R, gamma = five_tuple
-    data = torch.zeros((s * a, 1), requires_grad=True)
-    H = torch.randn([s * a] * k, dtype=torch.float32)
-    O = torch.zeros(omega[-1].shape)
-    for i in range(k):
-        Hi = initialize_H(five_tuple, i + 1)
-        H += fill_dims(Hi.get_tensor(), k)
-        O += fill_dims(omega[i], k)
-    H *= O
-    
-    if mode == 'cp':
-        [core, factors], error = parafac(H, chi, n_iter_max=20, init='svd', 
-                                         return_errors=True, mask=O)
-        combined_cores, _ = put_cp(factors)
-    if mode == 'mps':
-        tensors = matrix_product_state(H, chi)
-        tensors[0] = tensors[0].squeeze(0)
-        tensors[-1] = tensors[-1].squeeze(-1)
-        combined_cores, _ = put_mps(tensors)
-        error = None
-    if mode == 'full':
-        combined_cores = [tn.Node(H, backend=backend)]
-        error = None
-        
-    return H, combined_cores, data, error
-
-
 def build_network(five_tuple, k, chi, omega):
     s, a, P, R, gamma = five_tuple
     H = []
     H_core = []
-    data = torch.zeros((s * a, 1), requires_grad=True)
+    data = softmax_by_state(torch.randn((s * a, 1)), s, a)
+    data.requires_grad=True
+    
     for i in range(k):
         H.append(initialize_H(five_tuple, i + 1))
-        if i > 1:
-            [core, factors], error = parafac(H[i].get_tensor(), 
-                                             chi, n_iter_max=20, init='svd', 
-                                             return_errors=True, mask=omega[i])
-            combined_cores, _ = put_cp(factors)
+        if i >= 1:
+            factors = tensor_train(H[i].get_tensor(), chi).factors
+            combined_cores, _ = put_mps(factors)
             H_core.append(combined_cores)
         else:
             masked_H = H[i].get_tensor() * omega[i]
             H_core.append([tn.Node(masked_H, backend=backend)])
-    return H, H_core, data, error
+    return H, H_core, data
 
 
 def explore_env(trajectories, k, R, P, s, a):
@@ -171,3 +144,99 @@ def explore_env(trajectories, k, R, P, s, a):
             index = tuple(indices[r : r + kk].to(int))
             omega[kk][index] = 1
     return omega
+
+
+def softmax_by_state(data, s_size, a_size):
+    states = []
+    softmax = torch.nn.Softmax(dim=0)
+    for s in range(s_size):
+        state = data[s * a_size : (s+1) * a_size, :]
+        states.append(softmax(state))
+    cat = torch.cat(states, dim=0)
+    return cat
+
+
+def tensor_permute(tensor, k):
+    dims = torch.tensor(range(len(tensor.shape)))
+    perm = torch.roll(dims, -k, 0)
+    return tensor.permute(tuple(perm))
+
+
+def tensor_shift(tensors, k):
+    shifted_tensors = []
+    order = torch.tensor(range(len(tensors)))
+    perm = torch.roll(order, -k, 0)
+    for p in perm:
+        shifted_tensors.append(tensors[p])
+    return shifted_tensors
+
+
+def tensor_connect(tensors, k):
+    shifted = tensor_shift(tensors, k)
+    conn = shifted[1]
+    for i in range(2, len(shifted)):
+        conn = tl.tenalg.contract(conn, len(conn.shape)-1, shifted[i], 0)
+    mid_size = 1
+    for j in conn.shape[1:-1]:
+        mid_size *= j
+    conn = conn.reshape(conn.shape[0], mid_size, conn.shape[-1])
+    return conn
+
+
+def tt_als_step(X, Y, R, omega, _lambda, ranks):
+    for i in range(Y.shape[1]):
+        seen = []
+        for j in range(len(omega[i, :])):
+            if omega[i, j]:
+                seen.append(j)
+        if len(seen) == 0:
+            Y[:, i, :] = torch.zeros(ranks)
+            continue
+        temp_X = torch.cat([X[j, :].unsqueeze(0) for j in seen], axis=0)
+        temp_R = torch.cat([R[:, j].unsqueeze(-1) for j in seen], axis=1)
+        XTX = temp_X.T @ temp_X
+        lambdaI = torch.eye(XTX.shape[0]) * _lambda
+        y = torch.solve(torch.matmul(temp_R[i, :], temp_X).unsqueeze(-1), XTX + lambdaI).solution.squeeze()
+        Y[:, i, :] = y.reshape(ranks)
+    return Y
+
+
+def tt_als(T, cores, omega):
+    if len(cores) <= 1:
+        return cores
+    new_cores = []
+    for core in cores:
+        new_cores.append(core.get_tensor())
+    new_cores[0] = new_cores[0].unsqueeze(0)
+    new_cores[-1] = new_cores[-1].unsqueeze(-1)
+    for s in range(len(cores)):
+        B = tensor_connect(new_cores, s)
+        B_mat = tl.unfold(B, 1)
+        T_mat = tl.unfold(T.get_tensor(), s)
+        omega_mat = tl.unfold(omega, s)
+        ranks = (B.shape[-1], B.shape[0])
+        new_cores[s] = tt_als_step(B_mat, new_cores[s], T_mat, omega_mat, 0.01, ranks)
+    return put_mps(new_cores)[0] 
+
+
+def tensor_completion(cores, target, omega, lr=0.01, epochs=1):
+    if len(cores) <= 1:
+        return cores 
+    mps = []
+    for core in cores:
+        mps.append(core.get_tensor().clone().detach())
+
+    mps[0] = mps[0].unsqueeze(0)
+    mps[-1] = mps[-1].unsqueeze(-1)
+    
+    for core in mps:
+        core.requires_grad = True
+        
+    criterion = torch.nn.MSELoss()
+    op = optim.SGD(mps, lr=lr, momentum=0.9, weight_decay=5e-4)
+    for e in range(epochs):
+        op.zero_grad()
+        loss = criterion(omega * tt_to_tensor(mps), omega * target.get_tensor())
+        loss.backward()
+        op.step()
+    return put_mps(mps)[0]

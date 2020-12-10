@@ -4,7 +4,7 @@ import tensornetwork as tn
 
 class K_Spin(object):
     
-    def __init__(self, s_size, a_size, k, data=None, mode='combined'):
+    def __init__(self, s_size, a_size, k, data=None, softmax=False):
         '''
         args: 
             s_size: the cardinality of the state space
@@ -15,7 +15,6 @@ class K_Spin(object):
         self.k = k
         self.s_size = s_size
         self.a_size = a_size
-        self.mode = mode
     
         if data is not None:
             self.leaf = data
@@ -23,7 +22,9 @@ class K_Spin(object):
             self.leaf = torch.randn((s_size * a_size, 1))
             self.leaf.requires_grad = True
                 
-        self.data = self.softmax_by_state()
+        self.data = data
+        if softmax:
+            self.data = self.softmax_by_state()
         self.qubits = self.create_qubits()
         self.outer_product_chain()
 
@@ -40,11 +41,8 @@ class K_Spin(object):
             state = self.leaf[s * self.a_size : (s+1) * self.a_size, :]
             states.append(softmax(state))
         
-        cat = torch.cat(states, dim=0) 
-        if self.mode == 'combined':
-            return cat / torch.sum(cat)
-        else:
-            return cat
+        cat = torch.cat(states, dim=0)
+        return cat
         
         
     def outer_product_chain(self):
