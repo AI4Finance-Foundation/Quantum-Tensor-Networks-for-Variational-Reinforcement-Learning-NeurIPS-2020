@@ -2,6 +2,12 @@
 
 This repository provides the implementation for VRL algorithm and applies it to the classic Gridworld puzzle.
 
+[NeurIPS 2020 Workshop: First Workshop on Quantum Tensor Networks in Machine Learning](https://neurips.cc/virtual/2020/public/workshop_16127.html)
+
+[Quantum Tensor Networks for Variational Reinforcement Learning](https://tensorworkshop.github.io/NeurIPS2020/accepted_papers/NIPS_2020_Workshop_Yiming%20(2).pdf)
+
+
+
 ## Usage
 
 First, import the VRL module by
