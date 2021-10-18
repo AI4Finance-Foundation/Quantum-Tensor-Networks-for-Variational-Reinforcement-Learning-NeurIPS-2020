@@ -66,13 +66,13 @@ net.train()
 gamma = 1.0  # 多步衰减因子
 for epoch in range(epochs):
     slist, alist, rlist, flag = get_sample_traces_id(env, num_of_agents, num_of_steps)
-    slist = torch.from_numpy(slist).long().to(device).flatten()
-    alist = torch.from_numpy(alist).long().to(device).flatten()
-    rlist = torch.from_numpy(rlist).float().to(device).flatten()
-    flag = torch.from_numpy(flag).float().to(device).flatten()
-    non_zero_index = torch.arange(len(rlist), device=device, dtype=torch.long)[rlist != 0]
-    # 考虑当前状态-动作损失
-    while not len(non_zero_index):
+    slist = torch.from_numpy(slist).long().to(device).flatten() # 状态列表
+    alist = torch.from_numpy(alist).long().to(device).flatten() # 动作列表
+    rlist = torch.from_numpy(rlist).float().to(device).flatten() # 奖励列表
+    flag = torch.from_numpy(flag).float().to(device).flatten() # 每个agent的有效步数列表
+    non_zero_index = torch.arange(len(rlist), device=device, dtype=torch.long)[rlist != 0] # 获取有奖励的状态（步）
+    # 考虑当前状态-奖励来计算目标函数H
+    while not len(non_zero_index): # 可能会出现所有agent都没有获得奖励
         slist, alist, rlist, flag = get_sample_traces_id(env, num_of_agents, num_of_steps)
         slist = torch.from_numpy(slist).long().to(device).flatten()
         alist = torch.from_numpy(alist).long().to(device).flatten()
@@ -88,7 +88,7 @@ for epoch in range(epochs):
     first_target = - torch.mean(out_pa * crlist)
     non_zero_index = torch.arange(len(rlist), device=device, dtype=torch.long)[rlist> 0]
     k_target = 0.
-    #从有奖励的轮次开始前推，计算k步的H目标函数
+    #从有奖励的轮次开始前推，计算前k步的H目标函数
     for ck in range(1, k + 1):
         pre_k_step = non_zero_index - ck
         pre_k_step = pre_k_step[pre_k_step >= 0]
