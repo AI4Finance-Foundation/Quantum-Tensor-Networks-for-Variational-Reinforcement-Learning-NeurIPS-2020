@@ -27,8 +27,8 @@ args = parser.parse_args()
 env_name = r"FrozenLake8x8-v1"
 print("Env name: {}".format(env_name))
 env = gym.make('FrozenLake8x8-v1', is_slippery=False)  # tinyGridWordld_root()
-s_dim = env.observation_space.n
-a_dim = env.action_space.n
+s_dim = env.observation_space.n # 环境中的状态数目
+a_dim = env.action_space.n # 环境中的动作数目
 # generate R and P tensor
 # R = env.R
 # P = env.P
@@ -58,7 +58,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 print("")
 Pbar = pkbar.Pbar(name='Training progress of our policy', target=epochs)
 energy_history = []
-net = Network(input_size=2, max_steps=20, hidden_size=64, num_layer=2)
+net = Network()
 net = net.to(device)
 optimizer = optim.Adam(net.parameters(), lr=args.lr)
 k = args.k
