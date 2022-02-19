@@ -7,6 +7,7 @@ This repository provides the implementation for VRL algorithm and applies it to 
 [Quantum Tensor Networks for Variational Reinforcement Learning](https://tensorworkshop.github.io/NeurIPS2020/accepted_papers/NIPS_2020_Workshop_Yiming%20(2).pdf)
 
 
+**News** We utilize the H-term as an add-on term to improve the stability of the DRL algorithms in the ElegantRL project, e.g., [AgentPPO_H](https://github.com/AI4Finance-Foundation/ElegantRL/blob/master/elegantrl/agents/AgentPPO_H.py). 
 
 ## Usage
 
